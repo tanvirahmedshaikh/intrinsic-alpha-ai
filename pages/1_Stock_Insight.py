@@ -7,6 +7,7 @@ import time
 import datetime
 import plotly.graph_objects as go
 import math
+import uuid
 
 # --- PAGE CONFIGURATION ---
 st.set_page_config(
@@ -14,6 +15,77 @@ st.set_page_config(
     page_icon="📈",
     layout="wide"
 )
+
+# --- SESSION STATE INITIALIZATION ---
+if "sessions" not in st.session_state:
+    st.session_state.sessions = {}
+if "current_session_id" not in st.session_state:
+    st.session_state.current_session_id = None
+if "editing_session_id" not in st.session_state:
+    st.session_state.editing_session_id = None
+
+# Pre-populate dummy data for demonstration
+if not st.session_state.sessions:
+    st.session_state.sessions = {
+        str(uuid.uuid4()): {"title": "Is GOOG a Growth Stock?"},
+        str(uuid.uuid4()): {"title": "PEG Ratio Explained"},
+        str(uuid.uuid4()): {"title": "Comparing KO and PEP"},
+        str(uuid.uuid4()): {"title": "MSFT Intrinsic Value Analysis"} 
+    }
+    st.session_state.current_session_id = None
+
+def new_chat_session():
+    """Creates a new chat session."""
+    session_id = str(uuid.uuid4())
+    st.session_state.current_session_id = session_id
+    st.session_state.sessions[session_id] = {"title": "New Chat"}
+    st.session_state.editing_session_id = None
+
+# --- SIDEBAR: CHAT HISTORY ---
+with st.sidebar:
+    st.header("IntrinsicAlpha AI")
+    if st.button("New chat", use_container_width=True):
+        new_chat_session()
+        st.rerun()
+
+    st.markdown("---")
+    st.subheader("Recent")
+
+    if st.session_state.sessions:
+        for session_id, session_data in reversed(list(st.session_state.sessions.items())):
+            is_active = (session_id == st.session_state.current_session_id)
+            label = f"**▶ {session_data['title']}**" if is_active else session_data['title']
+
+            # Create a horizontal layout with three columns
+            col1, col2, col3 = st.columns([0.7, 0.15, 0.15])
+
+            with col1:
+                if st.button(label, key=f"load_{session_id}", use_container_width=True):
+                    st.session_state.current_session_id = session_id
+                    st.session_state.editing_session_id = None
+                    st.rerun()
+
+            with col2.container(border=False):
+                if st.button("✏️", key=f"start_edit_{session_id}", use_container_width=True):
+                    st.session_state.editing_session_id = session_id
+                    st.rerun()
+
+            with col3.container(border=False):
+                if st.button("🗑️", key=f"delete_{session_id}", use_container_width=True):
+                    del st.session_state.sessions[session_id]
+                    if st.session_state.current_session_id == session_id:
+                        st.session_state.current_session_id = None
+                    st.rerun()
+
+            # Handle the rename functionality
+            if st.session_state.editing_session_id == session_id:
+                new_title = st.text_input("New title", value=session_data["title"], key=f"edit_{session_id}", label_visibility="collapsed")
+                if new_title and new_title != session_data["title"]:
+                    st.session_state.sessions[session_id]["title"] = new_title
+                    st.session_state.editing_session_id = None
+                    st.rerun()
+
+    st.markdown("---")
 
 # --- HELPER FUNCTIONS ---
 def format_large_number(num):
@@ -234,14 +306,12 @@ else:
 
         st.plotly_chart(fig, use_container_width=True)
 
-
-
         st.markdown("---")
 
         # --- KEY METRICS TABLE ---
         st.subheader("Key Metrics")
 
-        # Custom CSS for smaller font size and a more compact layout
+        # Custom CSS for smaller font size in metrics
         st.markdown("""
         <style>
             /* Target the entire metric container */
@@ -260,95 +330,86 @@ else:
             }
         </style>
         """, unsafe_allow_html=True)
-
+        
         # Create a single list of all metrics to distribute
         all_metrics = [
             {"label": "Previous Close", "value": metrics_data.get('Previous Close'), "help": "The closing price of the stock on the previous trading day.", "format": ".2f"},
             {"label": "Open", "value": metrics_data.get('Open'), "help": "The price at which the stock began trading at the start of the current trading day.", "format": ".2f"},
             {"label": "Day's Range", "value": metrics_data.get("Day's Range"), "help": "The range between the highest and lowest prices at which a stock has traded during the current day."},
-            {"label": "Volume", "value": format_large_number(metrics_data.get('Volume')), "help": "The total number of shares of a security that have been traded during a given period."},
-            {"label": "Market Cap", "value": format_large_number(metrics_data.get('Market Cap')), "help": "The total value of a company’s outstanding shares. Used to determine a company's size."},
-            {"label": "P/B Ratio", "value": metrics_data.get('P/B Ratio'), "help": "The Price-to-Book (P/B) ratio compares a stock's price to the company's net asset value...", "format": ".2f"},
-            {"label": "Debt-to-Equity Ratio", "value": metrics_data.get('Debt-to-Equity Ratio'), "help": "A low Debt-to-Equity ratio (ideally below 1) is a sign of a financially strong company, which is crucial for stability.", "format": ".2f"},
-            {"label": "P/E Ratio (TTM)", "value": metrics_data.get('PE Ratio (TTM)'), "help": "The P/E Ratio (Price-to-Earnings) is a key valuation metric that compares a company's current stock price to its earnings.", "format": ".2f"},
-            {"label": "P/E vs. Historical Avg (5Y)", "value": hist_metrics.get('Historical PE Avg (5Y)'), "help": "This compares the current P/E to its 5-year historical average. A P/E below its historical average can indicate the stock is undervalued.", "format": ".2f"},
-            {"label": "EPS (TTM)", "value": metrics_data.get('EPS (TTM)'), "help": "Earnings Per Share (TTM) is the company's profit allocated to each outstanding share over the last 12 months.", "format": ".2f"},
-            {"label": "Avg. Volume", "value": format_large_number(metrics_data.get('Avg. Volume')), "help": "The average daily trading volume over a specified period. High volume can indicate strong investor interest."},
-            {"label": "Current ROA", "value": hist_metrics.get('Current ROA'), "help": "Return on Assets (ROA) measures how efficiently a company uses its assets to generate earnings. A higher ROA is generally better.", "format": ".1f", "suffix": "%"},
-            {"label": "Historical ROA Avg (5Y)", "value": hist_metrics.get('Historical ROA Avg (5Y)'), "help": "Historical Return on Assets shows how a company's efficiency has changed over time.", "format": ".1f", "suffix": "%"},
-            {"label": "Current Div Yield", "value": metrics_data.get('Current Dividend Yield'), "help": "The dividend yield shows the return on your investment from dividends alone.", "format": ".2f", "suffix": "%"},
-            {"label": "Historical Div Yield Avg (5Y)", "value": hist_metrics.get('Historical Dividend Yield Avg (5Y)'), "help": "The average dividend yield over the last 5 years. A current yield above the historical average may indicate an opportunity.", "format": ".2f", "suffix": "%"}
+            {"label": "Volume", "value": metrics_data.get('Volume'), "help": "The total number of shares of a security that have been traded during a given period. High volume can indicate strong investor interest.", "format_func": format_large_number},
+            {"label": "Market Cap", "value": metrics_data.get('Market Cap'), "help": "The total value of a company’s outstanding shares. Used to determine a company's size and compare it to others.", "format_func": format_large_number},
+            {"label": "P/B Ratio", "value": metrics_data.get('P/B Ratio'), "help": "The P/B ratio compares a stock's price to the company's net asset value. For a value investor, a P/B ratio under 1 is a traditional signal of an undervalued stock. Apple's P/B of ~58 is exceptionally high, reflecting strong market confidence in its intangible assets like brand and ecosystem, rather than its book value. This is significantly above its own 5-year average of ~29 and the technology industry average of ~13. This indicates the market is placing a very high value on the company's intangible assets, like its brand and ecosystem, rather than its tangible balance sheet. This is a crucial distinction from traditional value investing.", "format": ".2f"},
+            {"label": "Debt-to-Equity Ratio", "value": metrics_data.get('Debt-to-Equity Ratio'), "help": "This ratio indicates a company's financial leverage. A low ratio (under 1.5) is a sign of a financially strong company, which is crucial for stability. Apple's ratio of ~154 is high, suggesting a significant amount of debt, which should be considered when assessing risk.", "format": ".2f"},
+            {"label": "P/E Ratio (TTM)", "value": metrics_data.get('PE Ratio (TTM)'), "help": "The P/E Ratio (Price-to-Earnings) is a key valuation metric. For a defensive investor, Benjamin Graham suggested a P/E of less than 15. Apple's P/E of ~38.89 is significantly above this historical benchmark, suggesting the market expects substantial future growth. For an investor focused on a significant margin of safety, this metric is a warning sign that the stock may be overvalued.", "format": ".2f"},
+            {"label": "P/E vs. Historical Avg (5Y)", "value": hist_metrics.get('Historical PE Avg (5Y)'), "help": "This compares the current P/E to its 5-year historical average (~29). A P/E of ~38.89 is significantly higher, indicating the stock is valued above its own recent history and suggests strong market optimism about future growth.", "format": ".2f"},
+            {"label": "EPS (TTM)", "value": metrics_data.get('EPS (TTM)'), "help": "Earnings Per Share (TTM) is the company's profit allocated to each outstanding share. Consistent EPS growth is a hallmark of a high-quality, predictable business. There is no single 'good' EPS number; it's a metric of a company's profitability. A large, stable EPS like Apple's (~$6.59) is a key factor in calculating a company's intrinsic value and is a sign of a strong business.", "format": ".2f"},
+            {"label": "Avg. Volume", "value": metrics_data.get('Avg. Volume'), "help": "The average daily trading volume over a specified period. High volume can indicate strong investor interest.", "format_func": format_large_number},
+            {"label": "Current ROA", "value": hist_metrics.get('Current ROA'), "help": "Return on Assets (ROA) measures how efficiently a company uses its assets to generate earnings. A good ROA depends on the industry, but generally, a number over 20% is considered excellent. Apple's ROA of ~22.1% is not only a testament to its operational efficiency but is also significantly higher than the technology industry average of ~12%, indicating a strong competitive advantage and high-quality business model. This is a key metric for a value investor assessing a company with a strong 'moat.'", "format": ".1f", "suffix": "%"},
+            {"label": "Historical ROA Avg (5Y)", "value": hist_metrics.get('Historical ROA Avg (5Y)'), "help": "Historical Return on Assets shows how a company's efficiency has changed over time. Apple's current ROA (~22.1%) is higher than its historical average (~18.5%), indicating that the company's capital efficiency has improved.", "format": ".1f", "suffix": "%"},
+            {"label": "Current Div Yield", "value": metrics_data.get('Current Dividend Yield'), "help": "The dividend yield shows the return on your investment from dividends alone. Apple’s current yield of ~0.41% is low compared to the S&P 500 average of around 1.5–2% and even slightly below the tech sector average of ~0.5–1%. This is typical for a growth-oriented company that reinvests its profits into innovation rather than paying large dividends.", "format": ".2f", "suffix": "%"},
+            {"label": "Historical Div Yield Avg (5Y)", "value": hist_metrics.get('Historical Dividend Yield Avg (5Y)'), "help": "The average dividend yield over the last 5 years is ~0.52%. Apple’s current yield of ~0.41% is slightly below this historical average, which mainly reflects its rising stock price rather than a shift in dividend policy. For a stable payer like Apple, changes in yield usually signal price movement, not a change in fundamentals.", "format": ".2f", "suffix": "%"}
         ]
 
-        total_metrics = len(all_metrics)
-        # Calculate the number of metrics per column
-        metrics_per_col = total_metrics // 3
-        remainder = total_metrics % 3
-
-        # Distribute metrics evenly
-        col1_metrics = all_metrics[:metrics_per_col + (1 if remainder > 0 else 0)]
-        col2_metrics = all_metrics[len(col1_metrics):len(col1_metrics) + metrics_per_col + (1 if remainder > 1 else 0)]
-        col3_metrics = all_metrics[len(col1_metrics) + len(col2_metrics):]
-
-        # Create columns for metrics and the summary
-        col1, col2, col3, col4 = st.columns([0.2, 0.2, 0.2, 0.4])
-
-        # Display metrics in each column
+        # Create a 4-column layout for metrics and summary
+        col1, col2, col3, col4 = st.columns([0.21, 0.21, 0.21, 0.37])
+        
+        # Distribute the metrics evenly across the first three columns
+        metrics_per_col = len(all_metrics) // 3
+        
         with col1:
-            for m in col1_metrics:
+            for m in all_metrics[0:metrics_per_col]:
                 value_to_display = m.get('value')
-                if m.get('format'):
-                    try:
-                        if value_to_display is not None:
-                            value_to_display = f"{value_to_display:{m['format']}}"
-                    except (ValueError, TypeError):
-                        value_to_display = 'N/A'
-                
+                if 'format_func' in m:
+                    value_to_display = m['format_func'](value_to_display)
+                elif m.get('format') and value_to_display is not None:
+                    value_to_display = f"{value_to_display:{m['format']}}"
+                else:
+                    value_to_display = str(value_to_display)
+
                 if 'suffix' in m and value_to_display != 'N/A':
                     value_to_display += m['suffix']
-                    
+                
                 st.metric(label=m['label'], value=value_to_display, help=m['help'])
 
         with col2:
-            for m in col2_metrics:
+            for m in all_metrics[metrics_per_col:metrics_per_col*2]:
                 value_to_display = m.get('value')
-                if m.get('format'):
-                    try:
-                        if value_to_display is not None:
-                            value_to_display = f"{value_to_display:{m['format']}}"
-                    except (ValueError, TypeError):
-                        value_to_display = 'N/A'
-                
+                if 'format_func' in m:
+                    value_to_display = m['format_func'](value_to_display)
+                elif m.get('format') and value_to_display is not None:
+                    value_to_display = f"{value_to_display:{m['format']}}"
+                else:
+                    value_to_display = str(value_to_display)
+
                 if 'suffix' in m and value_to_display != 'N/A':
                     value_to_display += m['suffix']
-
+                
                 st.metric(label=m['label'], value=value_to_display, help=m['help'])
 
         with col3:
-            for m in col3_metrics:
+            for m in all_metrics[metrics_per_col*2:]:
                 value_to_display = m.get('value')
-                if m.get('format'):
-                    try:
-                        if value_to_display is not None:
-                            value_to_display = f"{value_to_display:{m['format']}}"
-                    except (ValueError, TypeError):
-                        value_to_display = 'N/A'
-                
+                if 'format_func' in m:
+                    value_to_display = m['format_func'](value_to_display)
+                elif m.get('format') and value_to_display is not None:
+                    value_to_display = f"{value_to_display:{m['format']}}"
+                else:
+                    value_to_display = str(value_to_display)
+
                 if 'suffix' in m and value_to_display != 'N/A':
                     value_to_display += m['suffix']
-
+                
                 st.metric(label=m['label'], value=value_to_display, help=m['help'])
         
         with col4:
             st.markdown(
                 """
-                <h3 style="margin-top: -5px; margin-bottom: 10px;">The Big Picture</h3>
+                <h3 style="margin-top: -50px; margin-bottom: 10px;">The Big Picture</h3>
                 """,
                 unsafe_allow_html=True
             )
-
             st.markdown(f"""
-            <div style="background-color: #f0f2f6; padding: 1.5rem; border-radius: 8px; height: 100%;">
+            <div style="background-color: #f0f2f6; padding: 1.5rem; border-radius: 8px; height: 100%; margin-top: -10px;">
                 <p>Our analysis on Apple (AAPL) indicates a mixed picture. While it is a high-quality business with a strong competitive advantage (moat), its current valuation metrics—like a P/E ratio of {metrics_data.get('PE Ratio (TTM)', 'N/A'):.2f} and a P/B ratio of {metrics_data.get('P/B Ratio', 'N/A'):.2f}—are significantly higher than what a traditional value investor would look for. However, the company's strong historical performance and high ROA suggest a very efficient business. This means the market is placing a high value on future growth and brand, rather than just the balance sheet. For an investor focused on a significant margin of safety, this stock may not present a compelling opportunity at its current price.
                 </p>
             </div>
@@ -358,18 +419,51 @@ else:
 
         # --- VALUATION DASHBOARD ---
         st.subheader("Intrinsic Value & Margin of Safety")
-        val_data = generate_valuation_data()
+
+        st.markdown(f"""
+        <div style="background-color: #f0f2f6; padding: 1rem; border-radius: 8px;">
+            <p><strong><font size='+1'>Investment Conclusion:</font></strong> Our analysis concludes that AAPL is a **"Wonderful Business at a Non-Sensible Price."** The company is high-quality, but its current market price is only justified by highly aggressive growth forecasts, leaving no Margin of Safety for the investor.</p>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        st.markdown("---")
+        
+        st.markdown("### DCF Intrinsic Value Analysis")
+        # Creating a table to show different valuation scenarios
+        valuation_data = {
+            "Valuation Case": ["Conservative Case", "Base Case", "Aggressive Case (LLM Premium)"],
+            "Key Assumptions": [
+                "High WACC, conservative FCF margin",
+                "WACC 8.0%, consensus FCF projections",
+                "Low WACC, high FCF ramp-up (AI demand)"
+            ],
+            "Intrinsic Value": [142.00, 193.00, 287.00],
+            "Current Price (≈$256)": [256.00, 256.00, 256.00],
+            "Margin of Safety (%)": [-44.4, -24.6, 12.1]
+        }
+        
+        valuation_df = pd.DataFrame(valuation_data)
+        st.dataframe(valuation_df, use_container_width=True)
+        
+        st.info("The table above shows that AAPL is significantly overvalued under a conservative or base-case analysis. A positive Margin of Safety only exists in the most aggressive, speculative scenario.")
+        
+        st.markdown("---")
+        
+        st.markdown("### Target Buy Price")
+        st.markdown("To purchase this stock with a protective Margin of Safety, an investor must wait for the price to drop to a level supported by a conservative valuation.")
+        
+        # Mock calculation for target buy price
+        base_case_intrinsic_value = 193.00
+        desired_margin_of_safety = 0.15 # 15%
+        target_buy_price = base_case_intrinsic_value * (1 - desired_margin_of_safety)
         
         val_col1, val_col2, val_col3 = st.columns(3)
         with val_col1:
-            last_price = stock_data_tf['Close'].iloc[-1]
-            st.metric("Current Price", f"${last_price:.2f}")
+            st.metric("Base Case Intrinsic Value", f"${base_case_intrinsic_value:.2f}")
         with val_col2:
-            st.metric("Intrinsic Value", f"${val_data['Intrinsic Value']:.2f}")
+            st.metric("Desired Margin of Safety", f"{desired_margin_of_safety:.0%}")
         with val_col3:
-            st.metric("Margin of Safety", f"{val_data['Margin of Safety (%)']:.2f}%")
-
-        st.info("The margin of safety is your cushion against risk. It is the difference between a stock’s current price and our conservative estimate of its intrinsic value. A larger margin of safety means a more secure investment.")
+            st.metric("Target Buy Price", f"${target_buy_price:.2f}")
 
         st.markdown("---")
 
@@ -377,9 +471,9 @@ else:
         st.subheader("Explainable AI: The Reasoning Behind the Analysis")
         st.markdown("Our AI breaks down its recommendation based on timeless value investing principles.")
         
-        st.markdown("""
+        st.markdown(f"""
         <div style="background-color: #f0f2f6; padding: 1.5rem; border-radius: 8px;">
-            <p><strong><font size='+1'>AI Summary:</font></strong> Our analysis on Apple (AAPL) indicates that while the stock is a high-quality business with a strong competitive advantage, its current valuation metrics—like a P/E ratio of 38.89—are significantly higher than the benchmarks favored by value investors. This suggests the market is pricing in substantial future growth. For an investor focused on a significant margin of safety, this stock may not present a compelling opportunity at its current price.</p>
+            <p><strong><font size='+1'>AI Summary:</font></strong> Our analysis concludes that AAPL is a **"Wonderful Business at a Non-Sensible Price."** The company is high-quality, but its current market price is only justified by highly aggressive growth forecasts, leaving no Margin of Safety for the investor.</p>
         </div>
         """, unsafe_allow_html=True)
         
@@ -404,23 +498,23 @@ else:
             st.markdown("#### The Story Behind the Data")
             with st.container(border=True):
                 st.markdown("""
-                - **Durable Business Moat:** Apple's powerful brand, closed ecosystem, and loyal customer base give it a significant moat, which is a key reason its value is high despite a high P/E ratio.
-                - **Earnings Power & Stability:** The company's consistent, growing earnings show a healthy and expanding business, aligning with Ben Graham's search for a proven track record.
-                - **Management Quality:** Tim Cook's management has successfully grown the company's services segment, demonstrating a key qualitative factor that contributes to its long-term value.
-                - **P/E Ratio:** While the P/E ratio of 38.89 is high for a typical value stock, our analysis takes into account the company's growth and moat, which justifies a higher multiple.
-                - **Debt-to-Equity Ratio:** We'd also consider the company's balance sheet to ensure it has a low debt-to-equity ratio, which is crucial for financial stability and fits with the principles of security analysis.
+                - **The Graham Number:** Under strict Graham screening, AAPL's high P/E of 38.82 and P/B of 58.21 lead to a quantitative failure. This is due to the structural obsolescence of P/B for tech companies with high intangible assets.
+                - **Buffett's Mandate:** However, the company passes the Buffett quality screen with a "Wide Economic Moat" built on its ecosystem and brand, as well as an exceptional Return on Equity (ROE) of 154.9%.
+                - **Moat Resilience & AI:** The AI recognizes that Apple’s high market valuation is a premium based on investor optimism around future AI/LLM integration.
+                - **DCF Analysis:** Our discounted cash flow (DCF) models show that the current price is only justified under highly aggressive growth scenarios, which eliminates any protective buffer for the investor.
                 """)
         
         st.markdown("---")
 
         # --- DECISION-MAKING FLOW ---
         st.subheader("AI Decision-Making Flow")
+        st.markdown("The AI uses a four-layered value framework to make a final determination.")
         with st.container(border=True):
             st.markdown("""
-            1.  **Quantitative Foundation:** The AI first analyzes key financial metrics like **earnings, debt, and assets** to establish a baseline of the company's financial health.
-            2.  **Qualitative Moat Assessment:** It then assesses the company's **business moat** by looking at factors like its brand, management quality, and competitive landscape.
-            3.  **Intrinsic Value Calculation:** Using a blended model that accounts for both quantitative financials and qualitative moats, the AI calculates a conservative estimate of the company's **intrinsic value**.
-            4.  **Margin of Safety Check:** Finally, it compares the calculated intrinsic value to the current market price to determine the **margin of safety**, which is the core driver of the final recommendation.
+            1.  **Quality Screen (Buffett):** The AI first checks for a durable **Economic Moat** and high **Capital Efficiency** (ROE/ROIC). **Result:** Pass.
+            2.  **Growth-Adjusted Value (Adapted Graham):** It then calculates the **PEG Ratio** to ensure the valuation is not overextended relative to growth. **Result:** Fail (PEG is too high).
+            3.  **Final Safety Margin (Buffett/Graham):** The AI performs a **DCF Analysis** to confirm a tangible Margin of Safety. **Result:** Fail (MOS is negative under conservative and base-case assumptions).
+            4.  **Final Determination:** Based on these results, the AI provides a definitive **NO-BUY** recommendation at the current price, as it lacks a protective safety buffer.
             """)
             
         st.markdown("---")

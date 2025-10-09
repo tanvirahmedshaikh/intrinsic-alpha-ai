@@ -1,12 +1,5 @@
 import streamlit as st
 
-# --- PAGE CONFIGURATION ---
-st.set_page_config(
-    page_title="IntrinsicAlpha AI",
-    page_icon="📈",
-    layout="wide"
-)
-
 # --- Custom CSS for a modern SaaS feel ---
 st.markdown("""
 <style>

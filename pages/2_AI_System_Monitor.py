@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import plotly.express as px
+import uuid
 
 # --- PAGE CONFIGURATION ---
 st.set_page_config(
@@ -10,6 +11,77 @@ st.set_page_config(
     layout="wide"
 )
 
+# --- SESSION STATE INITIALIZATION ---
+if "sessions" not in st.session_state:
+    st.session_state.sessions = {}
+if "current_session_id" not in st.session_state:
+    st.session_state.current_session_id = None
+if "editing_session_id" not in st.session_state:
+    st.session_state.editing_session_id = None
+
+# Pre-populate dummy data for demonstration
+if not st.session_state.sessions:
+    st.session_state.sessions = {
+        str(uuid.uuid4()): {"title": "Is GOOG a Growth Stock?"},
+        str(uuid.uuid4()): {"title": "PEG Ratio Explained"},
+        str(uuid.uuid4()): {"title": "Comparing KO and PEP"},
+        str(uuid.uuid4()): {"title": "MSFT Intrinsic Value Analysis"} 
+    }
+    st.session_state.current_session_id = None
+
+def new_chat_session():
+    """Creates a new chat session."""
+    session_id = str(uuid.uuid4())
+    st.session_state.current_session_id = session_id
+    st.session_state.sessions[session_id] = {"title": "New Chat"}
+    st.session_state.editing_session_id = None
+
+# --- SIDEBAR: CHAT HISTORY ---
+with st.sidebar:
+    st.header("IntrinsicAlpha AI")
+    if st.button("New chat", use_container_width=True):
+        new_chat_session()
+        st.rerun()
+
+    st.markdown("---")
+    st.subheader("Recent")
+
+    if st.session_state.sessions:
+        for session_id, session_data in reversed(list(st.session_state.sessions.items())):
+            is_active = (session_id == st.session_state.current_session_id)
+            label = f"**▶ {session_data['title']}**" if is_active else session_data['title']
+
+            # Create a horizontal layout with three columns
+            col1, col2, col3 = st.columns([0.7, 0.15, 0.15])
+
+            with col1:
+                if st.button(label, key=f"load_{session_id}", use_container_width=True):
+                    st.session_state.current_session_id = session_id
+                    st.session_state.editing_session_id = None
+                    st.rerun()
+
+            with col2.container(border=False):
+                if st.button("✏️", key=f"start_edit_{session_id}", use_container_width=True):
+                    st.session_state.editing_session_id = session_id
+                    st.rerun()
+
+            with col3.container(border=False):
+                if st.button("🗑️", key=f"delete_{session_id}", use_container_width=True):
+                    del st.session_state.sessions[session_id]
+                    if st.session_state.current_session_id == session_id:
+                        st.session_state.current_session_id = None
+                    st.rerun()
+
+            # Handle the rename functionality
+            if st.session_state.editing_session_id == session_id:
+                new_title = st.text_input("New title", value=session_data["title"], key=f"edit_{session_id}", label_visibility="collapsed")
+                if new_title and new_title != session_data["title"]:
+                    st.session_state.sessions[session_id]["title"] = new_title
+                    st.session_state.editing_session_id = None
+                    st.rerun()
+
+    st.markdown("---")
+    
 st.title("🧠 AI System Monitor")
 st.markdown("A transparent look into the AI agents and their performance.")
 
