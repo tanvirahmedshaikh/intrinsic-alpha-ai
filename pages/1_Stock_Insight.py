@@ -186,6 +186,78 @@ def generate_feature_importance_data():
     df = pd.DataFrame(data).sort_values('Importance', ascending=False)
     return df
 
+@st.cache_data
+def get_historical_financials(ticker):
+    """Fetches historical financials for 5 years."""
+    ticker_obj = yf.Ticker(ticker)
+    
+    try:
+        # Get annual financials for the last ~5 years
+        income_statement = ticker_obj.income_stmt
+        balance_sheet = ticker_obj.balance_sheet
+        cash_flow = ticker_obj.cash_flow
+        
+        # Pull key metrics from the fetched data
+        # Note: yfinance data is not always clean and might require more robust error handling
+        # This is a simplified version for the prototype.
+        
+        # Financials
+        revenue = income_statement.loc['Total Revenue'].iloc[:5]
+        net_income = income_statement.loc['Net Income'].iloc[:5]
+        
+        # Cash Flow & Balance Sheet
+        operating_cash_flow = cash_flow.loc['Cash Flow From Continuing Operating Activities'].iloc[:5]
+        capital_expenditures = cash_flow.loc['Capital Expenditures'].iloc[:5]
+        
+        # Calculate Free Cash Flow (FCF)
+        # FCF = Operating Cash Flow - Capital Expenditures
+        fcf = operating_cash_flow.values - np.abs(capital_expenditures.values)
+        fcf = pd.Series(fcf, index=operating_cash_flow.index)
+        
+        # Metrics
+        total_liabilities = balance_sheet.loc['Total Liabilities Net Minority Interest'].iloc[:5]
+        total_equity = balance_sheet.loc['Stockholders Equity'].iloc[:5]
+        debt_to_equity = total_liabilities.values / total_equity.values
+        debt_to_equity = pd.Series(debt_to_equity, index=total_equity.index)
+
+        # Calculate ROE
+        roe = net_income.values / total_equity.values
+        roe = pd.Series(roe, index=total_equity.index)
+        
+        return {
+            'revenue': revenue,
+            'net_income': net_income,
+            'fcf': fcf,
+            'debt_to_equity': debt_to_equity,
+            'roe': roe
+        }
+        
+    except Exception as e:
+        st.error(f"Could not fetch detailed financial data for {ticker.upper()}. Error: {e}")
+        return None
+
+@st.cache_data
+def get_moat_and_management_rating(ticker):
+    """Generates mock qualitative ratings."""
+    return {
+        "moat": {
+            "rating": "Very Wide Moat",
+            "explanation": "Powered by a deep ecosystem, brand loyalty, and significant switching costs. This is not just a product, but a lifestyle."
+        },
+        "management": {
+            "rating": "Exceptional",
+            "explanation": "Proven track record of innovation, efficient capital allocation, and strong shareholder returns. Consistently outpaces rivals."
+        }
+    }
+
+@st.cache_data
+def get_similar_stocks(ticker):
+    """Returns mock data for similar stocks."""
+    if ticker.upper() == 'AAPL':
+        return ['MSFT', 'GOOG', 'NVDA']
+    return ['MSFT', 'GOOG', 'NVDA']
+
+
 # --- PAGE TITLE & INPUT ---
 st.title("IntrinsicAlpha AI")
 st.markdown("Your Co-Pilot for Intelligent Value Investing.")
@@ -339,7 +411,7 @@ else:
             {"label": "Day's Range", "value": metrics_data.get("Day's Range"), "help": "The range between the highest and lowest prices at which a stock has traded during the current day."},
             {"label": "Volume", "value": metrics_data.get('Volume'), "help": "The total number of shares of a security that have been traded during a given period. High volume can indicate strong investor interest.", "format_func": format_large_number},
             {"label": "Market Cap", "value": metrics_data.get('Market Cap'), "help": "The total value of a company’s outstanding shares. Used to determine a company's size and compare it to others.", "format_func": format_large_number},
-            {"label": "P/B Ratio", "value": metrics_data.get('P/B Ratio'), "help": "The P/B ratio compares a stock's price to the company's net asset value. For a value investor, a P/B ratio under 1 is a traditional signal of an undervalued stock. Apple's P/B of ~58 is exceptionally high, reflecting strong market confidence in its intangible assets like brand and ecosystem, rather than its book value. This is significantly above its own 5-year average of ~29 and the technology industry average of ~13. This indicates the market is placing a very high value on the company's intangible assets, like its brand and ecosystem, rather than its tangible balance sheet. This is a crucial distinction from traditional value investing.", "format": ".2f"},
+            {"label": "P/B Ratio", "value": metrics_data.get('P/B Ratio'), "help": "The P/B (Price-to-Book) ratio compares a stock's price to the company's net asset value. For a value investor, a P/B ratio under 1 is a traditional signal of an undervalued stock. Apple's P/B of ~58 is exceptionally high, reflecting strong market confidence in its intangible assets like brand and ecosystem, rather than its book value. This is significantly above its own 5-year average of ~29 and the technology industry average of ~13. This indicates the market is placing a very high value on the company's intangible assets, like its brand and ecosystem, rather than its tangible balance sheet. This is a crucial distinction from traditional value investing.", "format": ".2f"},
             {"label": "Debt-to-Equity Ratio", "value": metrics_data.get('Debt-to-Equity Ratio'), "help": "This ratio indicates a company's financial leverage. A low ratio (under 1.5) is a sign of a financially strong company, which is crucial for stability. Apple's ratio of ~154 is high, suggesting a significant amount of debt, which should be considered when assessing risk.", "format": ".2f"},
             {"label": "P/E Ratio (TTM)", "value": metrics_data.get('PE Ratio (TTM)'), "help": "The P/E Ratio (Price-to-Earnings) is a key valuation metric. For a defensive investor, Benjamin Graham suggested a P/E of less than 15. Apple's P/E of ~38.89 is significantly above this historical benchmark, suggesting the market expects substantial future growth. For an investor focused on a significant margin of safety, this metric is a warning sign that the stock may be overvalued.", "format": ".2f"},
             {"label": "P/E vs. Historical Avg (5Y)", "value": hist_metrics.get('Historical PE Avg (5Y)'), "help": "This compares the current P/E to its 5-year historical average (~29). A P/E of ~38.89 is significantly higher, indicating the stock is valued above its own recent history and suggests strong market optimism about future growth.", "format": ".2f"},
@@ -418,113 +490,324 @@ else:
             
         st.markdown("---")
 
-        # --- VALUATION DASHBOARD ---
-        st.subheader("💰 Intrinsic Value & Margin of Safety")
+        # --- CONSOLIDATED INTRINSIC VALUE & MARGIN OF SAFETY SECTION ---
+        # This replaces the previous two sections entirely.
 
-        # --- Section intro ---
+        st.subheader("🎯 Intrinsic Value & Margin of Safety")
         st.markdown("""
-        <div style="background-color:#f0f2f6; padding:1rem; border-radius:10px;">
-            <p><strong>How to Read This:</strong> This section estimates Apple’s intrinsic value using 
-            discounted cash flow (DCF) analysis under three scenarios — conservative, base, and aggressive.
-            The <strong>Margin of Safety (MOS)</strong> shows how much downside protection the investor has 
-            if assumptions don’t hold true.</p>
+        The **Margin of Safety (MOS)** is the cornerstone of value investing, providing a crucial buffer against potential losses. It's the difference between a stock's estimated **intrinsic value** (its real worth) and its **market price**. A strong margin of safety is generally considered to be in the **20% to 30%** range.
+        """)
+
+        # Get current price
+        current_price = metrics_data.get('Previous Close', 0)
+        # Mock calculation using the base case intrinsic value
+        base_case_intrinsic_value = 193.00
+
+        # Calculate the actual MOS
+        if base_case_intrinsic_value > 0:
+            actual_mos_percent = ((base_case_intrinsic_value - current_price) / base_case_intrinsic_value) * 100
+        else:
+            actual_mos_percent = 0
+
+        if actual_mos_percent > 15:
+            verdict_text = "presents a strong"
+            color = "green"
+            arrow = "▲"
+        elif actual_mos_percent > 0:
+            verdict_text = "offers a thin"
+            color = "orange"
+            arrow = "↔"
+        else:
+            verdict_text = "offers no meaningful"
+            color = "red"
+            arrow = "▼"
+
+        st.markdown(f"""
+        <div style="background-color: #f0f2f6; padding: 1.5rem; border-radius: 8px;">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <div>
+                    <p style="font-size: 1.1em; font-weight: 500; color: #555;">Current Price:</p>
+                    <p style="font-size: 2em; font-weight: 700; margin-top: -10px;">${current_price:.2f}</p>
+                </div>
+                <div>
+                    <p style="font-size: 1.1em; font-weight: 500; color: #555;">Base Case Intrinsic Value:</p>
+                    <p style="font-size: 2em; font-weight: 700; margin-top: -10px;">${base_case_intrinsic_value:.2f}</p>
+                </div>
+                <div>
+                    <p style="font-size: 1.1em; font-weight: 500; color: #555;">Calculated MOS:</p>
+                    <p style="font-size: 2em; font-weight: 700; margin-top: -10px; color: {color};">{actual_mos_percent:.1f}%</p>
+                </div>
+            </div>
+            <hr style="border: 1px solid #ddd; margin: 15px 0;">
+            <p style="font-size: 1.1em; font-weight: 500;">
+            Our analysis indicates the stock is currently trading at a 
+            <span style="color: {color};"><strong>
+            {abs(actual_mos_percent):.1f}% { 'discount' if actual_mos_percent > 0 else 'premium' }
+            </strong></span> relative to its estimated intrinsic value, and {verdict_text} margin of safety for a value investor.
+            </p>
         </div>
         """, unsafe_allow_html=True)
 
-        # --- Philosophical summary ---
+        st.markdown("---")
+
+        # --- DCF Scenario Simulator ---
+        st.subheader("🧮 DCF Scenario Simulator")
+
         st.markdown("""
-        ### 🧠 Investment Verdict
-        > **"A Wonderful Business at a Non-Sensible Price."**
+        We use a **Discounted Cash Flow (DCF)** model to estimate what a company is truly worth — its **intrinsic value**.
 
-        Apple is a world-class company with a wide moat, but the market’s optimism around 
-        AI/LLM growth leaves little room for error. Intrinsic value estimates show that 
-        the stock offers **no meaningful Margin of Safety** at current prices.
+        DCF is like asking:  
+        > “If I owned this business and it kept generating cash every year, how much would all that future cash be worth to me today?”
+
+        It’s one of the most reliable valuation tools because it’s grounded in **cash generation**, not short-term market emotions.
+        """)
+
+        with st.expander("💡 How far into the future do we project?"):
+            st.markdown("""
+            Typically, our model projects **10 years** of future **Free Cash Flows (FCF)**.
+
+            - The first 10 years capture the **growth phase** — where sales, profits, and efficiency may improve.  
+            - After year 10, we assume the company settles into a **steady-state**, growing at a modest, stable pace.
+
+            This steady pace is captured by the **Terminal Growth Rate**, which usually ranges from **2–3%**, in line with long-term inflation and GDP growth.
+            """)
+
+        with st.expander("🧠 Why use DCF instead of other valuation models?"):
+            st.markdown("""
+            - **DCF** focuses on *cash generation* — it values the business like an owner, not a trader.  
+            - Models like **P/E** or **P/S multiples** depend on market sentiment and comparable companies.  
+            - **DCF** tells you what the business is *worth*, not just what others *pay* for it.
+            """)
+
+        with st.expander("📘 Quick Analogy"):
+            st.markdown("""
+            Imagine you own a **money machine** that prints \$10 every year.  
+            Would you pay \$100 for it? \$200?  
+
+            It depends on:
+            - How much you expect it to grow (the **FCF Growth Rate**)  
+            - How risky it is (your **Discount Rate**, or WACC)  
+            - And how long it can keep printing money (your **Projection Period** + **Terminal Growth Rate**)  
+
+            DCF ties all these together to find the fair price *today*.
+            """)
+
+        st.markdown("---")
+
+        # --- Valuation Scenarios ---
+        st.subheader("📊 Valuation Scenarios")
+
+        st.markdown("""
+        Before playing with the sliders, here’s how small changes in assumptions can shift a stock’s value dramatically.  
+
+        💡 **Why these numbers?**
+        - **Free Cash Flow (FCF) Growth →** How fast the company’s cash generation grows.  
+        Think of it as the *engine power* of the business. 5–15% is typical for stable firms, 15–25%+ for high-growth companies.
+        - **Discount Rate (WACC) →** Your required rate of return, adjusted for risk.  
+        Like a *risk premium* — the more uncertain the company, the higher the WACC you demand.
+        - **Terminal Growth Rate →** The company’s long-term, steady-state growth after your forecast period.  
+        Typically close to inflation (2–3%), since no company can outgrow the economy forever.
         """)
 
         st.markdown("---")
 
-        # --- Scenario inputs ---
-        st.markdown("### 🧮 DCF Scenario Simulator")
-
-        # Add interactive controls
-        current_price = 256.00
-        wacc = st.slider("Discount Rate (WACC)", 7.0, 10.0, 8.0, step=0.1)
-        tgr = st.slider("Terminal Growth Rate (%)", 2.0, 4.0, 2.5, step=0.1)
-
-        # Mock intrinsic value function (you can connect your actual DCF function later)
-        def intrinsic_value_scenario(wacc, tgr):
-            if wacc >= 9.5:
-                return 142.0
-            elif wacc >= 8.5:
-                return 193.0
-            else:
-                return 287.0 + (tgr - 2.5)*15  # adds small variation
-
-        intrinsic_value = intrinsic_value_scenario(wacc, tgr)
-        mos = 1 - (current_price / intrinsic_value)
-
-        col1, col2, col3 = st.columns(3)
-        col1.metric("Intrinsic Value", f"${intrinsic_value:,.2f}")
-        col2.metric("Current Price", f"${current_price:,.2f}")
-        mos_color = "🟢" if mos > 0.15 else "🟡" if mos > 0 else "🔴"
-        col3.metric("Margin of Safety", f"{mos:.1%} {mos_color}")
-
-        # --- NEW: LLM Market Premium Indicator ---
-        st.markdown("### 🤖 LLM Market Premium")
-
-        # Base intrinsic value (fundamental) vs AI optimism (current price)
-        llm_premium = (current_price / intrinsic_value - 1)
-        premium_color = "🟢" if llm_premium < 0 else "🔴"
-
-        colA, colB = st.columns(2)
-        colA.metric("Fundamental Value (Base Case)", f"${intrinsic_value:,.2f}")
-        colB.metric("Market Price Premium", f"{llm_premium:.1%} {premium_color}")
-
-        st.markdown(f"""
-        > The market is pricing Apple at a **{llm_premium*100:.1f}% premium** above its intrinsic value — 
-        an **“LLM optimism surcharge”** driven by expectations that AI and on-device intelligence will 
-        unlock new growth. Historically, premiums above 25–30% suggest the market is extrapolating future 
-        tech potential rather than present fundamentals.
-        """)
-
-        st.markdown("---")
-
-        # --- Visual comparison ---
-        st.markdown("### 📊 Valuation Scenarios")
+        # --- Example Scenario Table ---
         valuation_data = {
-            "Valuation Case": ["Conservative", "Base", "Aggressive (AI/LLM Premium)"],
+            "Valuation Case": ["Conservative", "Base", "Aggressive"],
+            "FCF Growth (5Y)": ["5%", "10%", "18%"],
+            "WACC": ["9.5%", "8.5%", "7.5%"],
+            "Terminal Growth Rate": ["2%", "2.5%", "3%"],
             "Intrinsic Value ($)": [142, 193, 287],
         }
         valuation_df = pd.DataFrame(valuation_data)
+        st.dataframe(valuation_df, use_container_width=True, hide_index=True)
 
-        fig, ax = plt.subplots()
-        ax.bar(valuation_df["Valuation Case"], valuation_df["Intrinsic Value ($)"], alpha=0.7)
-        ax.axhline(current_price, color='red', linestyle='--', label=f"Current Price (${current_price})")
-        ax.set_ylabel("Price ($)")
-        ax.legend()
-        st.pyplot(fig)
+        st.markdown("""
+        💡 **Why these numbers?**
 
-        st.info("Apple trades above its fair value under both conservative and base assumptions. "
-                "Only the most optimistic AI/LLM growth scenario supports the current price.")
+        - **Free Cash Flow (FCF) Growth** → Represents how fast the company’s cash generation grows.  
+        Think of it as the **engine power** of the business. 5–15% is typical for stable firms, 15–25%+ for fast growers.
 
-        st.markdown("---")
+        - **Discount Rate (WACC)** → This is your *required rate of return*, adjusted for risk.  
+        Like a **risk premium** — the more uncertain the company, the higher the WACC you demand.
 
-        # --- Target Buy Price ---
-        st.markdown("### 🎯 Target Buy Price Calculation")
+        - **Terminal Growth Rate** → The company’s long-term, steady-state growth after your forecast period.  
+        Typically close to inflation (2–3%), since no company can outgrow the economy forever.
 
-        base_case_intrinsic_value = 193.00
-        desired_mos = 0.15
-        target_buy_price = base_case_intrinsic_value * (1 - desired_mos)
+        ---
 
-        buy_col1, buy_col2, buy_col3 = st.columns(3)
-        buy_col1.metric("Base Case Intrinsic Value", f"${base_case_intrinsic_value:.2f}")
-        buy_col2.metric("Desired Margin of Safety", f"{desired_mos:.0%}")
-        buy_col3.metric("Target Buy Price", f"${target_buy_price:.2f}")
+        ### 🧠 The DCF Formula (Simplified)
 
-        st.markdown(f"""
-        > To own Apple with a **15% Margin of Safety**, an investor should wait for the price 
-        to fall to **around ${target_buy_price:.2f}**, roughly **{((current_price - target_buy_price)/current_price):.0%} below** its current level.
+        > **Intrinsic Value = Σ (FCFₜ / (1 + WACC)ᵗ) + (Terminal Value / (1 + WACC)ⁿ)**  
+        > where **Terminal Value = FCFₙ × (1 + g) / (WACC - g)**
+
+        In plain English:
+        - Project **future cash flows** (like forecasting your salary growth).
+        - **Discount** them back to today (since money today is worth more than tomorrow).
+        - Add the **terminal value** for all years beyond your forecast.
+
+        ---
+
+        ### 🎛️ Your DCF Playground
+        Now, adjust the assumptions below — see how small changes in growth or risk completely shift the company’s intrinsic value.
         """)
+
+        # --- User Inputs (Sliders) ---
+        col_fcf, col_wacc, col_term = st.columns(3)
+
+        with col_fcf:
+            st.markdown("#### FCF Growth Rate")
+            st.markdown("*Higher = faster-growing cash flow engine.*")
+            fcf_growth = st.slider("Projected FCF Growth (5–10 years)", 0.05, 0.20, 0.10, step=0.01, label_visibility="collapsed")
+            st.caption("Typically 5–15% for mature firms, 15–25%+ for fast growers.")
+
+        with col_wacc:
+            st.markdown("#### Discount Rate (WACC)")
+            st.markdown("*Think of this as your ‘risk hurdle.’ Higher WACC = higher required return.*")
+            wacc = st.slider("Discount Rate (WACC)", 0.07, 0.10, 0.085, step=0.005, label_visibility="collapsed")
+            st.caption("Usually 7–9% for stable firms, 9–12% for risky ones.")
+
+        with col_term:
+            st.markdown("#### Terminal Growth Rate")
+            st.markdown("*The company’s long-term steady growth after 10 years.*")
+            terminal_growth = st.slider("Terminal Growth Rate (%)", 0.02, 0.04, 0.025, step=0.005, label_visibility="collapsed")
+            st.caption("Typically near inflation (~2–3%).")
+
+        # --- DCF Calculation Function ---
+        def calculate_dcf(fcf_growth, wacc, terminal_growth, base_fcf=10000, years=10, shares_outstanding=16_000):
+            """
+            Simplified DCF model:
+            - fcf_growth: annual growth rate in FCF
+            - wacc: discount rate
+            - terminal_growth: long-term growth rate after forecast
+            - base_fcf: starting free cash flow (in millions)
+            - shares_outstanding: in millions
+            """
+            # Project future FCFs
+            fcfs = [base_fcf * ((1 + fcf_growth) ** t) for t in range(1, years + 1)]
+
+            # Discount each FCF to present value
+            discounted_fcfs = [fcf / ((1 + wacc) ** t) for t, fcf in enumerate(fcfs, start=1)]
+
+            # Terminal value
+            terminal_value = fcfs[-1] * (1 + terminal_growth) / (wacc - terminal_growth)
+            discounted_terminal = terminal_value / ((1 + wacc) ** years)
+
+            # Enterprise value (in millions)
+            total_value = sum(discounted_fcfs) + discounted_terminal
+
+            # Per-share value
+            intrinsic_value = total_value / shares_outstanding
+            return intrinsic_value
+
+        # --- Live DCF Calculation ---
+        intrinsic_value = calculate_dcf(fcf_growth, wacc, terminal_growth)
+        current_price = 230  # example
+
+        st.success(f"💰 **Estimated Intrinsic Value:** ${intrinsic_value:.2f} per share")
+
+        st.markdown("""
+        Use this as a **guide**, not an exact prediction.  
+        The real insight comes from understanding how **each assumption** changes the valuation.
+        """)
+
+        # --- Interactive Plotly Chart ---
+        fig = go.Figure()
+        fig.add_trace(go.Bar(
+            x=["Intrinsic Value"],
+            y=[intrinsic_value],
+            name="Intrinsic Value ($)",
+            marker_color="#4CAF50",
+            text=[f"${intrinsic_value:.2f}"],
+            textposition="auto"
+        ))
+        fig.add_trace(go.Bar(
+            x=["Current Price"],
+            y=[current_price],
+            name="Current Price ($)",
+            marker_color="#FF6B6B",
+            text=[f"${current_price:.2f}"],
+            textposition="auto"
+        ))
+        fig.update_layout(
+            title="Intrinsic Value vs Current Market Price",
+            yaxis_title="Price ($)",
+            barmode="group",
+            height=350,
+            showlegend=False
+        )
+        st.plotly_chart(fig, use_container_width=True)
+
+        st.info(f"""
+        At your chosen assumptions:
+        - **FCF Growth:** {fcf_growth*100:.1f}%
+        - **WACC:** {wacc*100:.1f}%
+        - **Terminal Growth:** {terminal_growth*100:.1f}%
+
+        👉 The intrinsic value changes dynamically — move the sliders to explore best and worst cases.
+        """)
+
+        st.markdown("""
+        > *“Price is what you pay. Value is what you get.”*  
+        > — **Warren Buffett**
+        """)
+
+
+                # --- MOAT, MANAGEMENT & SIMILAR STOCKS ---
+        st.subheader("💡 Qualitative Insights")
+        qual_col1, qual_col2 = st.columns(2)
+        
+        ratings = get_moat_and_management_rating(ticker)
+        
+        with qual_col1:
+            st.markdown("#### The Moat: Competitive Advantage")
+            st.markdown(f"""
+            <div style="background-color: #f0f2f6; padding: 1rem; border-radius: 8px;">
+                <p><strong>Rating:</strong> {ratings['moat']['rating']}</p>
+                <p><strong>Explanation:</strong> {ratings['moat']['explanation']}</p>
+            </div>
+            """, unsafe_allow_html=True)
+            
+            st.markdown("#### Management & Capital Allocation")
+            st.markdown(f"""
+            <div style="background-color: #f0f2f6; padding: 1rem; border-radius: 8px;">
+                <p><strong>Rating:</strong> {ratings['management']['rating']}</p>
+                <p><strong>Explanation:</strong> {ratings['management']['explanation']}</p>
+            </div>
+            """, unsafe_allow_html=True)
+            
+        with qual_col2:
+            st.markdown("#### 🔄 Stocks Like This")
+            similar_stocks = get_similar_stocks(ticker)
+            
+            # Create a comparison dataframe
+            compare_data = {'Ticker': [ticker] + similar_stocks}
+            compare_data['P/E Ratio'] = [get_key_metrics(t).get('PE Ratio (TTM)') for t in compare_data['Ticker']]
+            compare_data['P/B Ratio'] = [get_key_metrics(t).get('priceToBook') for t in compare_data['Ticker']]
+            compare_data['ROE'] = [get_key_metrics(t).get('returnOnEquity') for t in compare_data['Ticker']]
+            
+            compare_df = pd.DataFrame(compare_data)
+            
+            st.markdown(f"Our AI has identified the following stocks with similar business models or valuation characteristics to {ticker.upper()}.")
+            
+            st.dataframe(compare_df, use_container_width=True)
+
+            # Customizable comparison chart
+            chart_metric = st.selectbox(
+                "Select a metric to compare:",
+                ['P/E Ratio', 'P/B Ratio', 'ROE']
+            )
+
+            fig_comp = px.bar(
+                compare_df.melt(id_vars='Ticker', value_vars=[chart_metric]),
+                x='Ticker',
+                y='value',
+                title=f'Comparison by {chart_metric}',
+                labels={'value': chart_metric, 'Ticker': 'Company'},
+                color='Ticker',
+                color_discrete_sequence=px.colors.qualitative.Plotly
+            )
+            st.plotly_chart(fig_comp, use_container_width=True)
 
         st.markdown("---")
 
@@ -640,6 +923,44 @@ else:
         > *“Price is what you pay. Value is what you get.”*  
         > — Warren Buffett
         """)
+
+                # --- HISTORICAL FINANCIALS ---
+        st.subheader("📊 Historical Performance (Last 5 Years)")
+        st.markdown("A look at the company's financial trends helps confirm the durability of its business.")
+        
+        financials = get_historical_financials(ticker)
+
+        if financials:
+            # Create a combined dataframe for charting
+            financials_df = pd.DataFrame({
+                'Revenue': financials['revenue'],
+                'Net Income': financials['net_income'],
+                'Free Cash Flow': financials['fcf'],
+                'ROE': financials['roe']
+            }).sort_index()
+
+            # Chart 1: Revenue & Net Income
+            fig_inc = go.Figure()
+            fig_inc.add_trace(go.Bar(x=financials_df.index, y=financials_df['Revenue'], name='Revenue', marker_color='#2563EB'))
+            fig_inc.add_trace(go.Bar(x=financials_df.index, y=financials_df['Net Income'], name='Net Income', marker_color='#FBBF24'))
+            fig_inc.update_layout(title=f'Revenue & Net Income Trend for {ticker.upper()}',
+                                  barmode='group',
+                                  xaxis_title='Year',
+                                  yaxis_title='Amount ($)',
+                                  legend_title_text='Metric')
+            st.plotly_chart(fig_inc, use_container_width=True)
+
+            # Chart 2: FCF & ROE
+            fig_fcf = go.Figure()
+            fig_fcf.add_trace(go.Scatter(x=financials_df.index, y=financials_df['Free Cash Flow'], mode='lines+markers', name='Free Cash Flow', line=dict(color='#047857')))
+            fig_fcf.add_trace(go.Scatter(x=financials_df.index, y=financials_df['ROE']*100, mode='lines+markers', name='ROE (%)', line=dict(color='#B91C1C'), yaxis='y2'))
+            fig_fcf.update_layout(title=f'Free Cash Flow & ROE Trend for {ticker.upper()}',
+                                  xaxis_title='Year',
+                                  yaxis_title='Free Cash Flow ($)',
+                                  yaxis2=dict(title='ROE (%)', overlaying='y', side='right'))
+            st.plotly_chart(fig_fcf, use_container_width=True)
+
+        st.markdown("---")
 
         # --- CHAT INTERFACE ---
         st.header("💬 AI Co-Pilot")
