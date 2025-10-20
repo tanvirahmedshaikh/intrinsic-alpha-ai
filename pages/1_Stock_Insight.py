@@ -306,7 +306,7 @@ st.markdown("Your Co-Pilot for Intelligent Value Investing.")
 # Stock Ticker Input
 ticker = st.text_input(
     "Enter a Stock Ticker (e.g., AAPL)",
-    placeholder="AAPL",
+    placeholder="Enter 'AAPL' to see demo",
     key="stock_ticker_input",
     label_visibility="collapsed"
 )
