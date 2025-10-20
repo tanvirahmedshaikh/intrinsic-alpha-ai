@@ -422,8 +422,8 @@ else:
 
         st.markdown("---")
 
-        # --- KEY METRICS TABLE ---
-        st.subheader("Key Metrics")
+        # --- BUSINESS HEALTH & KEY METRICS ---
+        st.subheader("📊 Business Health & Key Metrics")
 
         # Custom CSS for smaller font size in metrics
         st.markdown("""
@@ -530,6 +530,241 @@ else:
             """, unsafe_allow_html=True)
             
         st.markdown("---")
+
+        # --- HISTORICAL FINANCIALS (IMPROVED) ---
+        st.subheader("📊 Historical Performance & Trends")
+        st.markdown("""
+        A look at the company's financial trends is like a **business's medical chart**. It helps us confirm if the business is healthy and if its competitive advantage is holding up over time.
+        """)
+                
+        financials = get_historical_financials(ticker)
+
+        if financials:
+            # Create a combined dataframe for charting
+            financials_df = pd.DataFrame({
+                'Revenue': financials['revenue'],
+                'Net Income': financials['net_income'],
+                'Free Cash Flow': financials['fcf'],
+                'ROE': financials['roe']
+            }).sort_index()
+
+            col_chart1, col_chart2 = st.columns(2)
+            
+            with col_chart1:
+                # Combined Chart: Revenue, Net Income, and Free Cash Flow
+                fig_inc_fcf = go.Figure()
+
+                # Revenue as a bar chart (light color)
+                fig_inc_fcf.add_trace(go.Bar(
+                    x=financials_df.index, 
+                    y=financials_df['Revenue'], 
+                    name='Revenue', 
+                    marker_color='#4E84C4',
+                    opacity=0.6,
+                ))
+
+                # Net Income as a bar chart (darker color)
+                fig_inc_fcf.add_trace(go.Bar(
+                    x=financials_df.index, 
+                    y=financials_df['Net Income'], 
+                    name='Net Income', 
+                    marker_color='#FFC34D',
+                    opacity=0.8,
+                ))
+
+                # FCF as a line chart with a different y-axis
+                fig_inc_fcf.add_trace(go.Scatter(
+                    x=financials_df.index, 
+                    y=financials_df['Free Cash Flow'], 
+                    mode='lines+markers', 
+                    name='Free Cash Flow', 
+                    line=dict(color='#047857', width=3), 
+                    yaxis='y2'
+                ))
+
+                fig_inc_fcf.update_layout(
+                    title=f'Revenue, Net Income, and FCF Trend for {ticker.upper()}',
+                    barmode='group',
+                    xaxis_title='Year',
+                    yaxis_title='Amount ($)',
+                    yaxis2=dict(
+                        title='Free Cash Flow ($)',
+                        overlaying='y',
+                        side='right',
+                        showgrid=False
+                    ),
+                    legend_title_text='Metric',
+                    height=550
+                )
+                st.plotly_chart(fig_inc_fcf, use_container_width=True)
+            
+            with col_chart2:
+                # Chart: ROE & Debt-to-Equity
+                fig_roe = go.Figure()
+
+                # ROE as a line chart
+                fig_roe.add_trace(go.Scatter(
+                    x=financials_df.index,
+                    y=financials_df['ROE'] * 100,
+                    mode='lines+markers',
+                    name='ROE (%)',
+                    line=dict(color='#B91C1C', width=3)
+                ))
+                
+                # Debt-to-Equity as a bar chart (on a different axis)
+                fig_roe.add_trace(go.Bar(
+                    x=financials_df.index,
+                    y=financials['debt_to_equity'],
+                    name='Debt-to-Equity',
+                    marker_color='#5A5A5A',
+                    opacity=0.5,
+                    yaxis='y2'
+                ))
+
+                fig_roe.update_layout(
+                    title=f'Profitability & Financial Health for {ticker.upper()}',
+                    xaxis_title='Year',
+                    yaxis_title='ROE (%)',
+                    yaxis2=dict(
+                        title='Debt-to-Equity',
+                        overlaying='y',
+                        side='right',
+                        showgrid=False
+                    ),
+                    legend_title_text='Metric',
+                    height=550
+                )
+                st.plotly_chart(fig_roe, use_container_width=True)
+
+            st.markdown("---")
+            st.markdown("#### 📖 Key Observations")
+            st.markdown(f"""
+            - **Revenue & FCF:** A healthy business should show consistent revenue growth. For a value investor, it's critical that this revenue translates into **Free Cash Flow**—the true "earning power" of a business. Look for a steady, upward trend.
+            - **ROE:** This measures how much profit the company generates with shareholder money. A **consistently high ROE** (typically >15-20%) is a hallmark of a high-quality business with a durable competitive advantage.
+            - **Financial Health:** We also look at the **Debt-to-Equity** ratio. A low and stable ratio is a sign of financial stability and disciplined management.
+            """)
+
+        # --- QUALITATIVE INSIGHTS & STOCK COMPARISON ---
+        st.subheader("💡 Qualitative Insights")
+        st.markdown("We analyze the non-quantifiable strengths of the business, such as its competitive advantages and the quality of its leadership. These are the **bedrock of long-term value investing**.")
+
+        qual_col1, qual_col2 = st.columns([0.45, 0.55])
+                
+        ratings = get_moat_and_management_rating(ticker)
+        key_metrics = get_key_metrics(ticker) # Fetching metrics again for ROIC
+
+        # Example of a new function to get more detailed moat and management info
+        def get_detailed_qualitative_insights(ticker):
+            if ticker.upper() == 'AAPL':
+                return {
+                    "moat": {
+                        "rating": "Very Wide Moat",
+                        "types": [
+                            {"name": "Network Effects", "icon": "🌐"},
+                            {"name": "High Switching Costs", "icon": "🔗"},
+                            {"name": "Intangible Assets (Brand)", "icon": "👑"}
+                        ],
+                        "explanation": "Powered by a deeply integrated ecosystem of hardware, software, and services. The **Network Effect** is at play as more users on the platform attract more developers and services. This creates **High Switching Costs**, as users are reluctant to leave the familiar ecosystem and abandon their app purchases, media library, and data. The **Intangible Asset** of its powerful brand allows it to command premium pricing."
+                    },
+                    "management": {
+                        "rating": "Exceptional",
+                        "explanation": "Management has a proven track record of efficient **capital allocation**, evidenced by consistent, disciplined share buybacks that have reduced the share count over time. Their focus on **innovation and margin control** has allowed the company to generate strong, predictable earnings and free cash flow."
+                    }
+                }
+            else:
+                # Placeholder for other tickers
+                return {
+                    "moat": {
+                        "rating": "No Moat",
+                        "types": [],
+                        "explanation": "Moat analysis is not available for this ticker yet. The AI is constantly learning and adding more detailed insights."
+                    },
+                    "management": {
+                        "rating": "N/A",
+                        "explanation": "Management analysis is not yet available for this ticker."
+                    }
+                }
+
+        # --- LEFT COLUMN: MOAT & MANAGEMENT ---
+        with qual_col1:
+            detailed_insights = get_detailed_qualitative_insights(ticker)
+
+            st.markdown("#### The Moat: Competitive Advantage")
+            st.info(
+                f"**Rating:** {detailed_insights['moat']['rating']} "
+                f"{' '.join([t['icon'] for t in detailed_insights['moat']['types']])}"
+            )
+            st.markdown(detailed_insights['moat']['explanation'])
+
+            st.markdown("#### Management & Capital Allocation")
+            st.info(f"**Rating:** {detailed_insights['management']['rating']}")
+            st.markdown(detailed_insights['management']['explanation'])
+
+        # --- RIGHT COLUMN: COMPARISONS ---
+        with qual_col2:
+            st.markdown("#### 🔄 Peers & Comparison")
+            
+            # Hardcoded comparison data, including ROIC
+            compare_data = {
+                'Ticker': ['AAPL', 'MSFT', 'GOOG', 'NVDA'],
+                'P/E Ratio': [38.89, 37.3, 24.95, 51.74],
+                'P/B Ratio': [58.2, 11.06, 7.91, 44.63],
+                'ROE': [154.9, 32.4, 34.3, 105.2],
+                'ROIC': [31.2, 25.5, 21.8, 34.1]
+            }
+            
+            compare_df = pd.DataFrame(compare_data)
+
+            # Add the "Why" column logic
+            compare_df['Reason for Comparison'] = [
+                "Primary subject of analysis.",
+                "A direct competitor in software and enterprise solutions with a strong cloud and AI focus.",
+                "A dominant player in digital advertising and a key competitor in AI and cloud computing.",
+                "A high-growth leader in the semiconductor industry, crucial for AI advancements."
+            ]
+
+            st.markdown(f"""
+            Our AI identifies peers with similar business models or valuation characteristics to **{ticker.upper()}**. 
+            Comparing them helps us see if the market is valuing your stock fairly relative to its peers.
+            """)
+            
+            st.dataframe(compare_df, use_container_width=True, hide_index=True)
+
+            # --- Consolidated Comparison Charts ---
+            st.markdown("##### Visualizing Key Differences")
+
+            chart1, chart2 = st.columns(2)
+            
+            with chart1:
+                # P/E Ratio Comparison
+                fig_pe = px.bar(
+                    compare_df.melt(id_vars=['Ticker', 'Reason for Comparison'], value_vars=['P/E Ratio']),
+                    x='Ticker',
+                    y='value',
+                    title='P/E Ratio Comparison',
+                    labels={'value': 'P/E Ratio'},
+                    color='Ticker',
+                    color_discrete_sequence=px.colors.qualitative.Plotly
+                )
+                fig_pe.update_layout(showlegend=False) 
+                st.plotly_chart(fig_pe, use_container_width=True)
+
+            with chart2:
+                # ROIC Comparison
+                fig_roic = px.bar(
+                    compare_df.melt(id_vars=['Ticker', 'Reason for Comparison'], value_vars=['ROIC']),
+                    x='Ticker',
+                    y='value',
+                    title='ROIC Comparison',
+                    labels={'value': 'ROIC (%)'},
+                    color='Ticker',
+                    color_discrete_sequence=px.colors.qualitative.Plotly
+                )
+                fig_roic.update_layout(showlegend=False)
+                st.plotly_chart(fig_roic, use_container_width=True)
+
+            st.info("The P/E Ratio reflects market expectations, while ROIC (Return on Invested Capital) measures how efficiently a company uses both debt and equity to generate profits. Comparing them reveals if a high price is justified by high capital efficiency.")
+
 
         # --- CONSOLIDATED INTRINSIC VALUE & MARGIN OF SAFETY SECTION ---
         # This replaces the previous two sections entirely.
@@ -832,127 +1067,6 @@ else:
         """)
 
 
-        # --- QUALITATIVE INSIGHTS & STOCK COMPARISON ---
-        st.subheader("💡 Qualitative Insights")
-        st.markdown("We analyze the non-quantifiable strengths of the business, such as its competitive advantages and the quality of its leadership. These are the **bedrock of long-term value investing**.")
-
-        qual_col1, qual_col2 = st.columns([0.45, 0.55])
-                
-        ratings = get_moat_and_management_rating(ticker)
-        key_metrics = get_key_metrics(ticker) # Fetching metrics again for ROIC
-
-        # Example of a new function to get more detailed moat and management info
-        def get_detailed_qualitative_insights(ticker):
-            if ticker.upper() == 'AAPL':
-                return {
-                    "moat": {
-                        "rating": "Very Wide Moat",
-                        "types": [
-                            {"name": "Network Effects", "icon": "🌐"},
-                            {"name": "High Switching Costs", "icon": "🔗"},
-                            {"name": "Intangible Assets (Brand)", "icon": "👑"}
-                        ],
-                        "explanation": "Powered by a deeply integrated ecosystem of hardware, software, and services. The **Network Effect** is at play as more users on the platform attract more developers and services. This creates **High Switching Costs**, as users are reluctant to leave the familiar ecosystem and abandon their app purchases, media library, and data. The **Intangible Asset** of its powerful brand allows it to command premium pricing."
-                    },
-                    "management": {
-                        "rating": "Exceptional",
-                        "explanation": "Management has a proven track record of efficient **capital allocation**, evidenced by consistent, disciplined share buybacks that have reduced the share count over time. Their focus on **innovation and margin control** has allowed the company to generate strong, predictable earnings and free cash flow."
-                    }
-                }
-            else:
-                # Placeholder for other tickers
-                return {
-                    "moat": {
-                        "rating": "No Moat",
-                        "types": [],
-                        "explanation": "Moat analysis is not available for this ticker yet. The AI is constantly learning and adding more detailed insights."
-                    },
-                    "management": {
-                        "rating": "N/A",
-                        "explanation": "Management analysis is not yet available for this ticker."
-                    }
-                }
-
-        # --- LEFT COLUMN: MOAT & MANAGEMENT ---
-        with qual_col1:
-            detailed_insights = get_detailed_qualitative_insights(ticker)
-
-            st.markdown("#### The Moat: Competitive Advantage")
-            st.info(
-                f"**Rating:** {detailed_insights['moat']['rating']} "
-                f"{' '.join([t['icon'] for t in detailed_insights['moat']['types']])}"
-            )
-            st.markdown(detailed_insights['moat']['explanation'])
-
-            st.markdown("#### Management & Capital Allocation")
-            st.info(f"**Rating:** {detailed_insights['management']['rating']}")
-            st.markdown(detailed_insights['management']['explanation'])
-
-        # --- RIGHT COLUMN: COMPARISONS ---
-        with qual_col2:
-            st.markdown("#### 🔄 Peers & Comparison")
-            
-            # Hardcoded comparison data, including ROIC
-            compare_data = {
-                'Ticker': ['AAPL', 'MSFT', 'GOOG', 'NVDA'],
-                'P/E Ratio': [38.89, 37.3, 24.95, 51.74],
-                'P/B Ratio': [58.2, 11.06, 7.91, 44.63],
-                'ROE': [154.9, 32.4, 34.3, 105.2],
-                'ROIC': [31.2, 25.5, 21.8, 34.1]
-            }
-            
-            compare_df = pd.DataFrame(compare_data)
-
-            # Add the "Why" column logic
-            compare_df['Reason for Comparison'] = [
-                "Primary subject of analysis.",
-                "A direct competitor in software and enterprise solutions with a strong cloud and AI focus.",
-                "A dominant player in digital advertising and a key competitor in AI and cloud computing.",
-                "A high-growth leader in the semiconductor industry, crucial for AI advancements."
-            ]
-
-            st.markdown(f"""
-            Our AI identifies peers with similar business models or valuation characteristics to **{ticker.upper()}**. 
-            Comparing them helps us see if the market is valuing your stock fairly relative to its peers.
-            """)
-            
-            st.dataframe(compare_df, use_container_width=True, hide_index=True)
-
-            # --- Consolidated Comparison Charts ---
-            st.markdown("##### Visualizing Key Differences")
-
-            chart1, chart2 = st.columns(2)
-            
-            with chart1:
-                # P/E Ratio Comparison
-                fig_pe = px.bar(
-                    compare_df.melt(id_vars=['Ticker', 'Reason for Comparison'], value_vars=['P/E Ratio']),
-                    x='Ticker',
-                    y='value',
-                    title='P/E Ratio Comparison',
-                    labels={'value': 'P/E Ratio'},
-                    color='Ticker',
-                    color_discrete_sequence=px.colors.qualitative.Plotly
-                )
-                fig_pe.update_layout(showlegend=False) 
-                st.plotly_chart(fig_pe, use_container_width=True)
-
-            with chart2:
-                # ROIC Comparison
-                fig_roic = px.bar(
-                    compare_df.melt(id_vars=['Ticker', 'Reason for Comparison'], value_vars=['ROIC']),
-                    x='Ticker',
-                    y='value',
-                    title='ROIC Comparison',
-                    labels={'value': 'ROIC (%)'},
-                    color='Ticker',
-                    color_discrete_sequence=px.colors.qualitative.Plotly
-                )
-                fig_roic.update_layout(showlegend=False)
-                st.plotly_chart(fig_roic, use_container_width=True)
-
-            st.info("The P/E Ratio reflects market expectations, while ROIC (Return on Invested Capital) measures how efficiently a company uses both debt and equity to generate profits. Comparing them reveals if a high price is justified by high capital efficiency.")
-
         # --- EXPLAINABILITY & REASONING ---
         st.subheader("🧠 Explainable AI: The Reasoning Behind the Analysis")
         st.markdown("""
@@ -1036,119 +1150,6 @@ else:
         > *“Price is what you pay. Value is what you get.”*  
         > — Warren Buffett
         """)
-
-        # --- HISTORICAL FINANCIALS (IMPROVED) ---
-        st.subheader("📊 Historical Performance")
-        st.markdown("""
-        A look at the company's financial trends is like a **business's medical chart**. It helps us confirm if the business is healthy and if its competitive advantage is holding up over time.
-        """)
-                
-        financials = get_historical_financials(ticker)
-
-        if financials:
-            # Create a combined dataframe for charting
-            financials_df = pd.DataFrame({
-                'Revenue': financials['revenue'],
-                'Net Income': financials['net_income'],
-                'Free Cash Flow': financials['fcf'],
-                'ROE': financials['roe']
-            }).sort_index()
-
-            col_chart1, col_chart2 = st.columns(2)
-            
-            with col_chart1:
-                # Combined Chart: Revenue, Net Income, and Free Cash Flow
-                fig_inc_fcf = go.Figure()
-
-                # Revenue as a bar chart (light color)
-                fig_inc_fcf.add_trace(go.Bar(
-                    x=financials_df.index, 
-                    y=financials_df['Revenue'], 
-                    name='Revenue', 
-                    marker_color='#4E84C4',
-                    opacity=0.6,
-                ))
-
-                # Net Income as a bar chart (darker color)
-                fig_inc_fcf.add_trace(go.Bar(
-                    x=financials_df.index, 
-                    y=financials_df['Net Income'], 
-                    name='Net Income', 
-                    marker_color='#FFC34D',
-                    opacity=0.8,
-                ))
-
-                # FCF as a line chart with a different y-axis
-                fig_inc_fcf.add_trace(go.Scatter(
-                    x=financials_df.index, 
-                    y=financials_df['Free Cash Flow'], 
-                    mode='lines+markers', 
-                    name='Free Cash Flow', 
-                    line=dict(color='#047857', width=3), 
-                    yaxis='y2'
-                ))
-
-                fig_inc_fcf.update_layout(
-                    title=f'Revenue, Net Income, and FCF Trend for {ticker.upper()}',
-                    barmode='group',
-                    xaxis_title='Year',
-                    yaxis_title='Amount ($)',
-                    yaxis2=dict(
-                        title='Free Cash Flow ($)',
-                        overlaying='y',
-                        side='right',
-                        showgrid=False
-                    ),
-                    legend_title_text='Metric',
-                    height=550
-                )
-                st.plotly_chart(fig_inc_fcf, use_container_width=True)
-            
-            with col_chart2:
-                # Chart: ROE & Debt-to-Equity
-                fig_roe = go.Figure()
-
-                # ROE as a line chart
-                fig_roe.add_trace(go.Scatter(
-                    x=financials_df.index,
-                    y=financials_df['ROE'] * 100,
-                    mode='lines+markers',
-                    name='ROE (%)',
-                    line=dict(color='#B91C1C', width=3)
-                ))
-                
-                # Debt-to-Equity as a bar chart (on a different axis)
-                fig_roe.add_trace(go.Bar(
-                    x=financials_df.index,
-                    y=financials['debt_to_equity'],
-                    name='Debt-to-Equity',
-                    marker_color='#5A5A5A',
-                    opacity=0.5,
-                    yaxis='y2'
-                ))
-
-                fig_roe.update_layout(
-                    title=f'Profitability & Financial Health for {ticker.upper()}',
-                    xaxis_title='Year',
-                    yaxis_title='ROE (%)',
-                    yaxis2=dict(
-                        title='Debt-to-Equity',
-                        overlaying='y',
-                        side='right',
-                        showgrid=False
-                    ),
-                    legend_title_text='Metric',
-                    height=550
-                )
-                st.plotly_chart(fig_roe, use_container_width=True)
-
-            st.markdown("---")
-            st.markdown("#### 📖 Key Observations")
-            st.markdown(f"""
-            - **Revenue & FCF:** A healthy business should show consistent revenue growth. For a value investor, it's critical that this revenue translates into **Free Cash Flow**—the true "earning power" of a business. Look for a steady, upward trend.
-            - **ROE:** This measures how much profit the company generates with shareholder money. A **consistently high ROE** (typically >15-20%) is a hallmark of a high-quality business with a durable competitive advantage.
-            - **Financial Health:** We also look at the **Debt-to-Equity** ratio. A low and stable ratio is a sign of financial stability and disciplined management.
-            """)
 
         # --- CHAT INTERFACE ---
         st.header("💬 AI Co-Pilot")
